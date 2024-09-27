@@ -1,41 +1,115 @@
 version: "3.9"
 services:
-  
-  cte:
-    container_name: cte_backend
+
+  app:
+    image: envioemail-back
     build:
-      context: .
+      context: ./
       dockerfile: dockerfile
       args:
-        PHP_VERSION: '7.4.33-fpm'
-        user: Daniel
-        uid: 1000
+        PHP_VERSION: '8.2-fpm'
+        workDir: /var/www/
+        dirApp: ./app
+        supervisordDir: ./docker/supervisord/supervisord.conf
+        entrypoint: ./docker/entrypoint.sh
+        user: daniel
     volumes:
       - ./app:/var/www/
-      - /var/www/vendor/
+      - /var/www/vendor
+    deploy:
+        replicas: 1
+        update_config:
+          order: start-first
+          failure_action: rollback
+          delay: 5s    
+        restart_policy:
+          condition: on-failure
+        resources:
+          limits:
+            memory: 2058M
+          reservations:
+            memory: 100M 
+    healthcheck:
+      test: curl --fail http://localhost/api/healthcheck || exit 1 
+      retries: 5
+      interval: 3s
+      timeout: 5s             
     networks:
-      - azapfyCte
+      - azap_net
+
+  queue:
+    image: envioemail-queue
+    build:
+      context: ./
+      dockerfile: dockerfile
+      args:
+        PHP_VERSION: '8.2-fpm'
+        workDir: /var/www/
+        dirApp: ./app
+        supervisordDir: ./docker/supervisord/supervisord-queue.conf
+        entrypoint: ./docker/entrypoint.sh
+        user: daniel
+    volumes:
+      - ./app:/var/www/
+      - /var/www/vendor
+    deploy:
+      replicas: 1
+      update_config:
+        order: start-first
+        failure_action: rollback
+        delay: 5s    
+      restart_policy:
+        condition: on-failure
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 100M 
+    networks:
+      - azap_net    
 
   nginx:
-      image: nginx:alpine
-      restart: unless-stopped
-      ports:
-        - "80:80"
-      volumes:
-        - ./app:/var/www
-        - ./docker/nginx/:/etc/nginx/conf.d/
-      networks:
-          - azapfyCte
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./app:/var/www/ # Mapear os codigos
+      - ./docker/nginx/:/etc/nginx/conf.d/ # Volume arquivo de Config
+    deploy:
+      resources:
+        limits:
+          memory: 100M
+        reservations:
+          memory: 20M
+    networks:
+      - azap_net
 
-  redis:
+  mysql:
+    image: mysql:8.0  # Utilize a versão do MySQL que preferir
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: 123 # **Importante:** Defina uma senha segura
+      MYSQL_DATABASE: laravel
+      MYSQL_USER: daniel
+      MYSQL_PASSWORD: 123
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql  
+    networks:
+      - azap_net
+
+  redis_back:
     image: redis:latest
     restart: unless-stopped
     command: redis-server --requirepass test-password
-    ports:
-      - "6379:6379"
     networks:
-      - azapfyCte
-  
+      - azap_net    
+
+volumes:
+  db_data:
+
 networks:
-    azapfyCte:
-      driver: bridge    
+  azap_net:
+    driver: bridge

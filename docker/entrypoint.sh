@@ -1,19 +1,7 @@
 #!/bin/sh
 set -e
 
-# Executar chown
-chown -R www-data:www-data * 
+# Executar o PHP FPM em segundo plano
 
-# Executar chmod
-chmod -R o+w /var/www/app 
-
-# # Executar o Supervisor
-# /usr/bin/supervisord -c /etc/supervisor/supervisord.conf
-
-# Executar o PHP FPM
-php-fpm
-
-exec "$@"
-
-
-
+# # # Executar o Supervisor em primeiro plano
+echo "123" | su root -c "/usr/bin/supervisord -c /etc/supervisor/supervisord.conf" & php-fpm    
